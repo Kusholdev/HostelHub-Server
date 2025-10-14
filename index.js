@@ -122,6 +122,20 @@ async function run() {
       }
     })
 
+    app.patch('/meals/:id/like', async (req, res) => {
+      const mealId = req.params.id;
+      try {
+        const result = await mealsCollection.updateOne(
+          { _id: new ObjectId(mealId) },
+          { $inc: { likes: 1 } }
+        );
+        res.send(result);
+      }
+      catch (error) {
+        res.status(500).send({ message: 'Failed to update like', error });
+      }
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
