@@ -2,7 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 dotenv.config();
 
@@ -52,10 +52,10 @@ async function run() {
 
     })
 
-    // GET /meals?search=&category=&minPrice=&maxPrice=
+
     app.get('/meals', async (req, res) => {
       try {
-        const { search, category, minPrice, maxPrice } = req.query;
+        const { search, category, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
 
         // Build query object
         const query = {};
@@ -65,7 +65,7 @@ async function run() {
           query.$or = [
             { title: { $regex: search, $options: 'i' } },
             { description: { $regex: search, $options: 'i' } },
-            { ingredients: { $regex: search, $options: 'i' } }, // works if ingredients stored as comma string
+            { ingredients: { $regex: search, $options: 'i' } },
           ];
         }
 
@@ -81,17 +81,46 @@ async function run() {
           if (maxPrice) query.price.$lte = parseFloat(maxPrice);
         }
 
-        // Fetch from MongoDB
-        const meals = await mealsCollection.find(query).toArray();
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
 
-        // Send response
-        res.send(meals);
+        // Count total meals after filtering
+        const total = await mealsCollection.countDocuments(query);
 
+        // Fetch meals for current page
+        const meals = await mealsCollection
+          .find(query)
+          .sort({ _id: -1 })
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .toArray();
+
+        // Determine next page
+        const nextPage = pageNum * limitNum < total ? pageNum + 1 : null;
+
+        res.send({ meals, nextPage });
       } catch (error) {
         console.error("Error fetching meals:", error);
         res.status(500).send({ message: "Failed to fetch meals" });
       }
     });
+
+    // get the specific meal details base on the id
+    app.get('/meals/:id', async (req, res) => {
+      const id = req.params.id;
+      try {
+
+        const meal = await mealsCollection.findOne({ _id: new ObjectId(id) });
+        if (!meal) {
+          return res.status(404).sendDate({ message: 'Meal not found' })
+        }
+        res.send(meal);
+      }
+      catch (error) {
+        console.log(error);
+        return res.status(500).send({ message: 'Server error' })
+      }
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
