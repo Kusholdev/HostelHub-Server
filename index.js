@@ -31,8 +31,8 @@ async function run() {
     await client.connect();
 
     const mealsCollection = client.db("HostelHubDB").collection("MealData");
-
-
+    const usersCollection = client.db("HostelHubDB").collection("users");
+    const reviewsCollection = client.db("HostelHubDB").collection('reviews');
 
     // add meal form form
     app.post('/meals', async (req, res) => {
@@ -133,6 +133,43 @@ async function run() {
       }
       catch (error) {
         res.status(500).send({ message: 'Failed to update like', error });
+      }
+    })
+
+
+    // Save user info in DB
+    app.post('/users', async (req, res) => {
+      const email = req.body.email;
+      const userExists = await usersCollection.findOne({ email });
+      if (userExists) {
+        return res.status(200).send({ message: 'user already exists', inserted: false });
+      }
+      const user = req.body;
+
+      const result = await usersCollection.insertOne(user);
+
+      res.send(result);
+    })
+
+    //reviews collection
+    app.post('/reviews', async (req, res) => {
+      const review = req.body;
+      const mealId = review.mealId;
+
+      try {
+        // Save review to new collection "reviews"
+        const reviewResult = await reviewsCollection.insertOne(review);
+
+        // Increase reviewCount in meals collection
+        await mealsCollection.updateOne(
+          { _id: new ObjectId(mealId) },
+          { $inc: {reviews_count: 1 } }
+        );
+
+        res.send({ success: true, reviewResult });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ success: false, message: "Failed to post review" });
       }
     })
 
