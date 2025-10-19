@@ -136,6 +136,47 @@ async function run() {
       }
     })
 
+    // get the users info
+    app.get('/users', async (req, res) => {
+      try {
+        const result = await usersCollection.find().sort({ _id: -1 }).toArray();
+        res.send(result);
+      }
+      catch (error) {
+        // console.error(error);
+        res.status(500).send({ message: 'Failed to fetch users' });
+      }
+    })
+
+    //update user info set in DB
+    app.patch('/users/role/:email', async (req, res) => {
+      const email = req.params.email;
+      const { role } = req.body;
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: { role } }
+      );
+      res.send(result);
+    });
+    // GET user role by email
+    app.get('/users/:email/role', async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        // Find the user by email
+        const user = await usersCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+
+        // Return the role
+        res.send({ role: user.role || 'user' });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to get user role' });
+      }
+    });
 
     // Save user info in DB
     app.post('/users', async (req, res) => {
@@ -163,7 +204,7 @@ async function run() {
         // Increase reviewCount in meals collection
         await mealsCollection.updateOne(
           { _id: new ObjectId(mealId) },
-          { $inc: {reviews_count: 1 } }
+          { $inc: { reviews_count: 1 } }
         );
 
         res.send({ success: true, reviewResult });
