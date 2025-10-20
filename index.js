@@ -148,6 +148,12 @@ async function run() {
       }
     })
 
+    //  get users data for user and admin Dashboard
+    app.get('/users/:email', async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({ email });
+      res.send(result);
+    })
     //update user info set in DB
     app.patch('/users/role/:email', async (req, res) => {
       const email = req.params.email;
@@ -213,6 +219,28 @@ async function run() {
         res.status(500).send({ success: false, message: "Failed to post review" });
       }
     })
+
+    //get specific users reviews
+    // Get specific user's reviews
+    app.get('/reviews/:email', async (req, res) => {
+      const email = req.params.email;
+
+
+      const query={
+        userEmail: email
+      }
+      try {
+        // Find all reviews that match the email
+        const result = await reviewsCollection.find(query ).toArray();
+
+        // Send them back as JSON
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching user reviews:", error);
+        res.status(500).send({ message: "Server Error" });
+      }
+    });
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
