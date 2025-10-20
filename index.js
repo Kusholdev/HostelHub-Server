@@ -220,21 +220,27 @@ async function run() {
       }
     })
 
-    //get specific users reviews
+
     // Get specific user's reviews
     app.get('/reviews/:email', async (req, res) => {
       const email = req.params.email;
 
-
-      const query={
-        userEmail: email
-      }
       try {
-        // Find all reviews that match the email
-        const result = await reviewsCollection.find(query ).toArray();
+        // get all reviews of the user
+        const reviews = await reviewsCollection.find({ userEmail: email }).toArray();
 
-        // Send them back as JSON
-        res.send(result);
+        //  Add likes from mealData for each review
+        const reviewsWithLikes = await Promise.all(
+          reviews.map(async (review) => {
+            const meal = await mealsCollection.findOne({ _id: new ObjectId(review.mealId) });
+            return {
+              ...review,
+              likes: meal?.likes || 0,  // include likes from mealData
+            };
+          })
+        );
+
+        res.send(reviewsWithLikes);
       } catch (error) {
         console.error("Error fetching user reviews:", error);
         res.status(500).send({ message: "Server Error" });
@@ -242,6 +248,47 @@ async function run() {
     });
 
 
+    // Update a specific review comment
+    app.put('/reviews/:id', async (req, res) => {
+      const id = req.params.id;
+      const { comment } = req.body;
+
+      try {
+        // Convert id to ObjectId
+        const filter = { _id: new ObjectId(id) };
+
+        // Define the update
+        const updateDoc = {
+          $set: {
+            comment: comment,
+            updatedAt: new Date(),
+          },
+        };
+
+        // Perform the update
+        const result = await reviewsCollection.updateOne(filter, updateDoc);
+
+        if (result.modifiedCount > 0) {
+          res.send({ success: true, message: "Review updated successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "Review not found or no changes made" });
+        }
+      } catch (error) {
+        console.error("Error updating review:", error);
+        res.status(500).send({ success: false, message: "Server error while updating review" });
+      }
+    });
+    app.delete('/reviews/:id', async (req, res) => {
+      const id = req.params.id;
+      try {
+        const query = { _id: new ObjectId(id) };
+        const result = await reviewsCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        console.error("Error deleting review:", error);
+        res.status(500).send({ message: "Server Error" });
+      }
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
