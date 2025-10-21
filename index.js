@@ -104,6 +104,26 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch meals" });
       }
     });
+    // ?sortBy=likes or ?sortBy=reviews_count
+    app.get('/allMeals', async (req, res) => {
+      try {
+        const sortBy = req.query.sortBy || '';
+        const order = req.query.order === 'asc' ? 1 : -1;
+
+        let sortQuery = {};
+
+        if (sortBy === 'likes') sortQuery = { likes: order };
+        else if (sortBy === 'reviews_count') sortQuery = { reviews_count: order };
+        else sortQuery = { _id: -1 }; // default sorting by latest
+
+        const meals = await mealsCollection.find().sort(sortQuery).toArray();
+
+        res.send(meals);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to fetch meals' });
+      }
+    });
 
     // get the specific meal details base on the id
     app.get('/meals/:id', async (req, res) => {
@@ -136,17 +156,30 @@ async function run() {
       }
     })
 
-    // get the users info
+    // get the users info (with search support)
     app.get('/users', async (req, res) => {
       try {
-        const result = await usersCollection.find().sort({ _id: -1 }).toArray();
+        const search = req.query.search || ''; // ?search=keyword
+
+        // Create a filter for username or email
+        const query = {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },  // case-insensitive name search
+            { email: { $regex: search, $options: 'i' } }  // case-insensitive email search
+          ]
+        };
+
+        const result = await usersCollection
+          .find(search ? query : {}) // if no search, show all
+          .sort({ _id: -1 })
+          .toArray();
+
         res.send(result);
-      }
-      catch (error) {
-        // console.error(error);
+      } catch (error) {
+        console.error(error);
         res.status(500).send({ message: 'Failed to fetch users' });
       }
-    })
+    });
 
     //  get users data for user and admin Dashboard
     app.get('/users/:email', async (req, res) => {
@@ -289,6 +322,34 @@ async function run() {
         res.status(500).send({ message: "Server Error" });
       }
     });
+    app.get('/allReviews', async (req, res) => {
+
+      try {
+        const reviews = await reviewsCollection.find().toArray();
+        
+        const reviewsAndMeal = await Promise.all(
+          reviews.map(async (review) => {
+            const meal = await mealsCollection.findOne({ _id:new ObjectId(review.mealId) });
+            return {
+              _id: review._id,
+              userName: review.userName,
+              userEmail: review.userEmail,
+              comment: review.comment,
+              mealTitle: meal?.title || "Meal not found",
+              likes: meal?.likes || 0,
+              reviews_count: meal?.reviews_count || 0
+            };
+          })
+        )
+        res.send(reviewsAndMeal);
+
+      }
+      catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to fetch reviews' });
+      }
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
