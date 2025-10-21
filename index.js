@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const admin = require("firebase-admin");
 
 dotenv.config();
 
@@ -12,6 +13,12 @@ const PORT = process.env.PORT || 5000;
 // middleWar
 app.use(cors());
 app.use(express.json());
+
+var serviceAccount = require("./firebase_Key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.hl3uycw.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -34,8 +41,51 @@ async function run() {
     const usersCollection = client.db("HostelHubDB").collection("users");
     const reviewsCollection = client.db("HostelHubDB").collection('reviews');
 
+
+    //middleWar
+    const verifyFBToken = async (req, res, next) => {
+
+
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).send({ message: 'unauthorized access' })
+      }
+
+      const token = authHeader.split(' ')[1];
+      if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+      }
+
+      // verify The ToKen
+
+      try {
+        // const decoded = await admin.auth().
+        const decoded = await admin.auth().verifyIdToken(token);
+        req.decoded = decoded;
+        next();
+
+      }
+      catch (error) {
+        return res.status(403).send({ message: 'forbidden access' })
+
+      }
+    }
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email }
+      const user = await usersCollection.findOne(query);
+      if (!user || user.role !== 'admin') {
+        return res.status(403).send({ message: 'forbidden access' })
+      }
+      next();
+    }
+
+
+
+
+
     // add meal form form
-    app.post('/meals', async (req, res) => {
+    app.post('/meals',verifyFBToken,verifyAdmin, async (req, res) => {
       try {
 
         const meal = req.body;
@@ -53,7 +103,8 @@ async function run() {
     })
 
 
-    app.get('/meals', async (req, res) => {
+    app.get('/meals', verifyFBToken, async (req, res) => {
+
       try {
         const { search, category, minPrice, maxPrice, page = 1, limit = 10 } = req.query;
 
@@ -105,7 +156,7 @@ async function run() {
       }
     });
     // ?sortBy=likes or ?sortBy=reviews_count
-    app.get('/allMeals', async (req, res) => {
+    app.get('/allMeals',verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const sortBy = req.query.sortBy || '';
         const order = req.query.order === 'asc' ? 1 : -1;
@@ -322,14 +373,14 @@ async function run() {
         res.status(500).send({ message: "Server Error" });
       }
     });
-    app.get('/allReviews', async (req, res) => {
+    app.get('/allReviews',verifyFBToken,verifyAdmin, async (req, res) => {
 
       try {
         const reviews = await reviewsCollection.find().toArray();
-        
+
         const reviewsAndMeal = await Promise.all(
           reviews.map(async (review) => {
-            const meal = await mealsCollection.findOne({ _id:new ObjectId(review.mealId) });
+            const meal = await mealsCollection.findOne({ _id: new ObjectId(review.mealId) });
             return {
               _id: review._id,
               userName: review.userName,
