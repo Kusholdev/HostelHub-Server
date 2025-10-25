@@ -7,6 +7,8 @@ const admin = require("firebase-admin");
 
 dotenv.config();
 
+const stripe = require('stripe')(process.env.Payment_GateWay_Key);
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -40,7 +42,7 @@ async function run() {
     const mealsCollection = client.db("HostelHubDB").collection("MealData");
     const usersCollection = client.db("HostelHubDB").collection("users");
     const reviewsCollection = client.db("HostelHubDB").collection('reviews');
-
+    const paymentsCollection = client.db("HostelHubDB").collection('payment');
 
     //middleWar
     const verifyFBToken = async (req, res, next) => {
@@ -85,7 +87,7 @@ async function run() {
 
 
     // add meal form form
-    app.post('/meals',verifyFBToken,verifyAdmin, async (req, res) => {
+    app.post('/meals', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
 
         const meal = req.body;
@@ -156,7 +158,7 @@ async function run() {
       }
     });
     // ?sortBy=likes or ?sortBy=reviews_count
-    app.get('/allMeals',verifyFBToken,verifyAdmin, async (req, res) => {
+    app.get('/allMeals', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const sortBy = req.query.sortBy || '';
         const order = req.query.order === 'asc' ? 1 : -1;
@@ -373,7 +375,7 @@ async function run() {
         res.status(500).send({ message: "Server Error" });
       }
     });
-    app.get('/allReviews',verifyFBToken,verifyAdmin, async (req, res) => {
+    app.get('/allReviews', verifyFBToken, verifyAdmin, async (req, res) => {
 
       try {
         const reviews = await reviewsCollection.find().toArray();
@@ -401,6 +403,62 @@ async function run() {
       }
     })
 
+
+    // Save payment info to DB
+    app.post('/payments', async (req, res) => {
+      try {
+        const { email, plan, amount, transactionId, date } = req.body;
+
+        if (!email || !plan || !amount || !transactionId) {
+          return res.status(400).send({ message: "Missing required fields" });
+        }
+
+        const paymentData = {
+          email,
+          plan,
+          amount,
+          transactionId,
+          date: date ? new Date(date) : new Date()
+        };
+
+        // Save payment
+        const result = await paymentsCollection.insertOne(paymentData);
+
+        // Update user role based on plan
+        const updateUserRole = await usersCollection.updateOne(
+          { email }, 
+          {
+            $set: {
+              Badge: plan
+            }
+          }
+        );
+
+      res.send(result);
+      } catch (error) {
+        console.error("Error saving payment:", error);
+        res.status(500).send({
+          success: false,
+          message: "Failed to save payment"
+        });
+      }
+    });
+
+
+    app.post('/create-payment-intent', async (req, res) => {
+      const amountInCents = req.body.amountInCents
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents, // Amount in cents
+          currency: 'usd',
+          payment_method_types: ['card'],
+        });
+
+        res.json({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
