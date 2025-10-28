@@ -43,6 +43,7 @@ async function run() {
     const usersCollection = client.db("HostelHubDB").collection("users");
     const reviewsCollection = client.db("HostelHubDB").collection('reviews');
     const paymentsCollection = client.db("HostelHubDB").collection('payment');
+    const RequestedMeals = client.db("HostelHubDB").collection('mealRequest');
 
     //middleWar
     const verifyFBToken = async (req, res, next) => {
@@ -403,6 +404,67 @@ async function run() {
       }
     })
 
+    // get the plan form mealsDetailsPage
+    app.get("/userPlan/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
+
+
+        const latestPayment = await paymentsCollection
+          .find({ email })
+          .sort({ date: -1 })
+          .limit(1)
+          .toArray();
+
+        if (!latestPayment || latestPayment.length === 0) {
+
+          return res.send({ plan: "Bronze" });
+        }
+
+        // Return the user's plan from latest payment
+        res.send({ plan: latestPayment[0].plan });
+      } catch (error) {
+        console.error("Error fetching user plan:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    app.post("/mealRequests", async (req, res) => {
+      const mealRequest = req.body;
+      mealRequest.status = mealRequest.status || "pending";
+      mealRequest.requestedAt = new Date(mealRequest.requestedAt || Date.now());
+
+      const result = await RequestedMeals.insertOne(mealRequest);
+      res.send(result);
+    });
+
+
+
+    app.get('/paymentHistory/:email', async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        if (!email) {
+          return res.status(400).send({ message: 'Email is Required' })
+        }
+        const payments = await paymentsCollection.find({ email }).sort({ date: -1 }).toArray();
+
+        if (!payments || payments.length === 0) {
+          return res.status(404).send({ message: "No payment history found for this user." });
+        }
+
+        res.send(payments);
+      }
+      catch (error) {
+        console.error("Error fetching payment history:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+
+    })
+
 
     // Save payment info to DB
     app.post('/payments', async (req, res) => {
@@ -426,7 +488,7 @@ async function run() {
 
         // Update user role based on plan
         const updateUserRole = await usersCollection.updateOne(
-          { email }, 
+          { email },
           {
             $set: {
               Badge: plan
@@ -434,7 +496,7 @@ async function run() {
           }
         );
 
-      res.send(result);
+        res.send(result);
       } catch (error) {
         console.error("Error saving payment:", error);
         res.status(500).send({
