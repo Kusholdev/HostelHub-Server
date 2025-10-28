@@ -441,8 +441,53 @@ async function run() {
       res.send(result);
     });
 
+    // Get meal requests for a specific user
+    app.get("/mealRequests/:email", async (req, res) => {
+      try {
+        const email = req.params.email;
+        if (!email) {
+          return res.status(400).send({ message: "Email is required" });
+        }
 
 
+        const userRequests = await RequestedMeals
+          .find({ userEmail: email })
+          .sort({ requestedAt: -1 })
+          .toArray();
+
+        if (!userRequests || userRequests.length === 0) {
+          return res.status(404).send({ message: "No meal requests found for this user." });
+        }
+
+        res.send(userRequests);
+      } catch (error) {
+        console.error("Error fetching meal requests:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // Deleting the request
+    app.delete('/mealRequests/:id', async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        if (!ObjectId.isValid(id)) {
+          return res.status(400).send({ message: "Invalid request ID" });
+        }
+
+        const result = await RequestedMeals.deleteOne({ _id: new ObjectId(id) });
+
+        if (result.deletedCount === 0) {
+          return res.status(404).send({ message: "Meal request not found" });
+        }
+
+        res.send({ message: "Meal request deleted successfully" });
+      }
+      catch (error) {
+        console.error("Error deleting meal request:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    })
     app.get('/paymentHistory/:email', async (req, res) => {
       try {
         const email = req.params.email;
