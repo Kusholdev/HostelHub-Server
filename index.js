@@ -466,6 +466,55 @@ async function run() {
       }
     });
 
+    //get mealRequest for admin to show 
+    app.get('/allMealRequest', async (req, res) => {
+      try {
+        const { search } = req.query;
+        let query = {};
+
+        if (search) {
+          query = {
+            $or: [
+              { userName: { $regex: search, $options: "i" } },
+              { userEmail: { $regex: search, $options: "i" } }
+            ]
+          };
+        }
+
+        const requests = await RequestedMeals.find(query).toArray();
+
+        if (!requests.length) {
+          return res.status(404).send({ message: "No meal requests found." });
+        }
+
+        res.send(requests);
+      } catch (error) {
+
+        res.status(500).send({ message: "Internal server error." });
+      }
+    });
+    app.patch('/serveMeal/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await RequestedMeals.updateOne(
+          { _id: new ObjectId(id) },
+          { $set:
+             { status: "Delivered" }
+         }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).send({ message: "Meal request not found." });
+        }
+
+        res.send({ message: "Meal served successfully." });
+      } catch (error) {
+        console.error("Error updating meal status:", error);
+        res.status(500).send({ message: "Internal server error." });
+      }
+    });
+
+
     // Deleting the request
     app.delete('/mealRequests/:id', async (req, res) => {
       try {
