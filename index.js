@@ -44,6 +44,7 @@ async function run() {
     const reviewsCollection = client.db("HostelHubDB").collection('reviews');
     const paymentsCollection = client.db("HostelHubDB").collection('payment');
     const RequestedMeals = client.db("HostelHubDB").collection('mealRequest');
+    const UpComingMealsCollection = client.db("HostelHubDB").collection('upComingMeals');
 
     //middleWar
     const verifyFBToken = async (req, res, next) => {
@@ -158,6 +159,46 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch meals" });
       }
     });
+
+    //Only for admin for post Upcoming meals - Admin
+    app.post('/upComingMeals', async (req, res) => {
+      try {
+
+        const meal = req.body;
+        const result = await UpComingMealsCollection.insertOne(meal);
+
+        res.send(result);
+
+
+      }
+      catch (error) {
+        console.log(error);
+        res.status(500).send({ message: 'Failed to add meal' });
+      }
+    })
+    // GET all upcoming meals sorted by likes - Admin ( add Token Here)
+    app.get('/upcomingMeals', async (req, res) => {
+      try {
+        const meals = await UpComingMealsCollection
+          .find()
+          .sort({ likes: -1 }) // descending order
+          .toArray();
+
+        res.send(meals);
+      } catch (error) {
+        console.error('Error fetching upcoming meals:', error);
+        res.status(500).send({ message: 'Server Error' });
+      }
+    });
+
+    //Delete from upcoming meals
+    app.delete("/upcomingMeals/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await UpComingMealsCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
+
     // ?sortBy=likes or ?sortBy=reviews_count
     app.get('/allMeals', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
@@ -498,9 +539,10 @@ async function run() {
         const id = req.params.id;
         const result = await RequestedMeals.updateOne(
           { _id: new ObjectId(id) },
-          { $set:
-             { status: "Delivered" }
-         }
+          {
+            $set:
+              { status: "Delivered" }
+          }
         );
 
         if (result.modifiedCount === 0) {
