@@ -199,6 +199,126 @@ async function run() {
     });
 
 
+    //users to see the upComing Meals
+    app.get('/allUpComingMeals', async (req, res) => {
+      try {
+        const upComingMeals = await UpComingMealsCollection
+          .find()
+          .sort({ _id: -1 })
+          .toArray();
+
+        res.send(upComingMeals);
+      }
+      catch (error) {
+        console.error('Error fetching upcoming meals:', error);
+        res.status(500).send({ message: 'Server Error' });
+      }
+    })
+
+    app.get('/allUpcomingMeals/:id', async (req, res) => {
+      const id = req.params.id;
+      try {
+
+        const meal = await UpComingMealsCollection.findOne({ _id: new ObjectId(id) });
+        if (!meal) {
+          return res.status(404).sendDate({ message: 'Meal not found' })
+        }
+        res.send(meal);
+      }
+      catch (error) {
+        console.log(error);
+        return res.status(500).send({ message: 'Server error' })
+      }
+    })
+    app.get('/users/:email/Badge', async (req, res) => {
+      try {
+        const email = req.params.email;
+        const user = await usersCollection.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
+        }
+
+        // ✅ Return the Badge correctly
+        res.send({ Badge: user?.Badge });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: 'Failed to get user Badge' });
+      }
+    });
+
+
+    // app.patch("/allUpcomingMeals/:id/like", verifyFBToken, async (req, res) => {
+    //   try {
+    //     const { id } = req.params;
+    //      console.log(id)
+    //     // if (!ObjectId.isValid(id))
+    //     //   return res.status(400).json({ message: "Invalid meal ID" });
+
+    //     const userEmail = req.user?.email;
+    //     console.log(req.user)
+    //     if (!userEmail) return res.status(401).json({ message: "Unauthorized" });
+
+    //     // Find user
+    //     const user = await usersCollection.findOne({ email: userEmail });
+    //     if (!user) return res.status(404).json({ message: "User not found" });
+
+    //     // ✅ Only premium users can like
+    //     const premiumBadges = ["Silver", "Gold", "Platinum"];
+    //     if (!premiumBadges.includes(user?.Badge)) {
+    //       return res
+    //         .status(403)
+    //         .json({ message: "Only premium users can like meals." });
+    //     }
+
+    //     // Find meal
+    //     const meal = await mealsCollection.findOne({ _id: new ObjectId(id) });
+    //     if (!meal) return res.status(404).json({ message: "Meal not found" });
+
+    //     // ✅ Increment likes without checking if already liked
+    //     await mealsCollection.updateOne(
+    //       { _id: new ObjectId(id) },
+    //       { $inc: { likes: 1 }, $push: { likedUsers: userEmail } }
+    //     );
+
+    //     res.json({ message: "Liked successfully" });
+    //   } catch (err) {
+    //     console.error("Like route error:", err);
+    //     res.status(500).json({ message: "Server error" });
+    //   }
+    // });
+
+    app.patch("/allUpcomingMeals/:id/like", async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { email } = req.body;  // <-- frontend must send { email: user.email }
+    
+        if (!email) return res.status(400).json({ message: "Email is required" });
+    
+        const user = await usersCollection.findOne({ email });
+    
+        if (!user) return res.status(404).json({ message: "User not found" });
+    
+        const premiumBadges = ["Silver", "Gold", "Platinum"];
+        if (!premiumBadges.includes(user.Badge)) {
+          return res.status(403).json({ message: "Only premium users can like meals." });
+        }
+    
+        await UpComingMealsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $inc: { likes: 1 } }
+        );
+    
+        res.json({ message: "Liked successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+      }
+    });
+    
+
+
+
     // ?sortBy=likes or ?sortBy=reviews_count
     app.get('/allMeals', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
